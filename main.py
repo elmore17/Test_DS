@@ -1,120 +1,110 @@
-import matplotlib.pyplot as plt
-import os
-import re
-import shutil
-import string
 import tensorflow as tf
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+import numpy as np
+import joblib
+import os
+import tarfile
+import urllib.request
 
-from tensorflow.keras import layers
-from tensorflow.keras import losses
-
+# Загрузка данных
 url = "https://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz"
+data_dir = "./aclImdb"
+if not os.path.exists(data_dir):
+    urllib.request.urlretrieve(url, "aclImdb_v1.tar.gz")
+    with tarfile.open("aclImdb_v1.tar.gz", "r:gz") as tar:
+        tar.extractall()
+    os.remove("aclImdb_v1.tar.gz")
 
-dataset = tf.keras.utils.get_file("aclImdb_v1", url, untar=True, cache_dir='.', cache_subdir='')
+# Загрузка текстовых отзывов и их меток
+def load_data(subset):
+    texts = []
+    labels = []
+    for label in ['pos', 'neg']:
+        dir_name = os.path.join(data_dir, subset, label)
+        for fname in os.listdir(dir_name):
+            if fname.endswith('.txt'):
+                with open(os.path.join(dir_name, fname), encoding='utf-8') as f:
+                    texts.append(f.read())
+                labels.append(1 if label == 'pos' else 0)
+    return texts, labels
 
-dataset_dir = os.path.join(os.path.dirname(dataset), 'aclImdb')
+train_texts, train_labels = load_data("train")
+test_texts, test_labels = load_data("test")
 
-train_dir = os.path.join(dataset_dir, 'train')
+# Предобработка данных
+max_words = 10000
+max_sequence_length = 300
 
-remove_dir = os.path.join(train_dir, 'unsup')
+tokenizer = Tokenizer(num_words=max_words)
+tokenizer.fit_on_texts(train_texts)
 
-batch_size = 32
-seed = 42
+train_sequences = tokenizer.texts_to_sequences(train_texts)
+test_sequences = tokenizer.texts_to_sequences(test_texts)
 
-raw_train_ds = tf.keras.utils.text_dataset_from_directory(
-    'aclImdb/train', 
-    batch_size=batch_size, 
-    validation_split=0.2, 
-    subset='training', 
-    seed=seed)
+train_data = pad_sequences(train_sequences, maxlen=max_sequence_length)
+test_data = pad_sequences(test_sequences, maxlen=max_sequence_length)
 
-raw_val_ds = tf.keras.utils.text_dataset_from_directory(
-    'aclImdb/train', 
-    batch_size=batch_size, 
-    validation_split=0.2, 
-    subset='validation', 
-    seed=seed)
+# Создание и обучение модели RNN
+embedding_dim = 100
+model = tf.keras.models.Sequential([
+    tf.keras.layers.Embedding(max_words, embedding_dim, input_length=max_sequence_length),
+    tf.keras.layers.LSTM(128),
+    tf.keras.layers.Dense(1, activation='sigmoid')
+])
 
-raw_test_ds = tf.keras.utils.text_dataset_from_directory(
-    'aclImdb/test', 
-    batch_size=batch_size)
-
-def custom_standardization(input_data):
-  lowercase = tf.strings.lower(input_data)
-  stripped_html = tf.strings.regex_replace(lowercase, '<br />', ' ')
-  return tf.strings.regex_replace(stripped_html, '[%s]' % re.escape(string.punctuation), '')
-
-max_features = 10000
-sequence_length = 250
-
-vectorize_layer = layers.TextVectorization(
-    standardize=custom_standardization,
-    max_tokens=max_features,
-    output_mode='int',
-    output_sequence_length=sequence_length)
-
-# Make a text-only dataset (without labels), then call adapt
-train_text = raw_train_ds.map(lambda x, y: x)
-vectorize_layer.adapt(train_text)
-
-def vectorize_text(text, label):
-  text = tf.expand_dims(text, -1)
-  return vectorize_layer(text), label
-
-# retrieve a batch (of 32 reviews and labels) from the dataset
-text_batch, label_batch = next(iter(raw_train_ds))
-first_review, first_label = text_batch[0], label_batch[0]
-
-train_ds = raw_train_ds.map(vectorize_text)
-val_ds = raw_val_ds.map(vectorize_text)
-test_ds = raw_test_ds.map(vectorize_text)
-
-AUTOTUNE = tf.data.AUTOTUNE
-
-train_ds = train_ds.cache().prefetch(buffer_size=AUTOTUNE)
-val_ds = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
-test_ds = test_ds.cache().prefetch(buffer_size=AUTOTUNE)
-
-
-embedding_dim = 16
-
-model = tf.keras.Sequential([
-  layers.Embedding(max_features + 1, embedding_dim),
-  layers.Dropout(0.2),
-  layers.GlobalAveragePooling1D(),
-  layers.Dropout(0.2),
-  layers.Dense(1)])
+model.compile(optimizer='adam',
+              loss='binary_crossentropy',
+              metrics=['accuracy'])
 
 model.summary()
 
-model.compile(loss=losses.BinaryCrossentropy(from_logits=True),
-              optimizer='adam',
-              metrics=tf.metrics.BinaryAccuracy(threshold=0.0))
+# Обучение модели
+epochs = 5
+batch_size = 32
+model.fit(train_data, np.array(train_labels), epochs=epochs, batch_size=batch_size, validation_split=0.2)
 
-epochs = 10
-history = model.fit(
-    train_ds,
-    validation_data=val_ds,
-    epochs=epochs)
+# Сохранение модели на диск
+model.save("test_DS.h5")
 
-export_model = tf.keras.Sequential([
-  vectorize_layer,
-  model,
-  layers.Activation('sigmoid')
-])
+# Загрузка модели с диска, если она уже обучена
+if os.path.exists("test_DS.h5"):
+    model = tf.keras.models.load_model("test_DS.h5")
 
-export_model.compile(
-    loss=losses.BinaryCrossentropy(from_logits=False), optimizer="adam", metrics=['accuracy']
-)
+# Оценка модели на тестовых данных
+loss, accuracy = model.evaluate(test_data, np.array(test_labels))
+print(f'Test accuracy: {accuracy}')
 
-# Test it with `raw_test_ds`, which yields raw strings
-loss, accuracy = export_model.evaluate(raw_test_ds)
-print(accuracy)
+# Ввод данных с клавиатуры для теста
+def get_user_input():
+    user_input = input("Введите свой комментарий: ")
+    return user_input
 
-examples = [
-  "The movie was great!",
-  "The movie was okay.",
-  "The movie was terrible..."
-]
+# Предобработка данных пользователя
+def preprocess_user_data(user_input, tokenizer, max_sequence_length):
+    user_sequence = tokenizer.texts_to_sequences([user_input])
+    user_data = pad_sequences(user_sequence, maxlen=max_sequence_length)
+    return user_data
 
-print(export_model.predict(examples))
+# Получение предсказания от модели
+def get_prediction(model, user_data):
+    prediction = model.predict(user_data)
+    return prediction[0][0]
+
+# Загрузка токенизатора
+max_words = 10000
+max_sequence_length = 300
+
+tokenizer = Tokenizer(num_words=max_words)
+tokenizer.fit_on_texts(train_texts)
+
+# Предложим пользователю ввести комментарий и получим его предсказание
+user_input = get_user_input()
+    
+user_data = preprocess_user_data(user_input, tokenizer, max_sequence_length)
+prediction = get_prediction(model, user_data)
+    
+if prediction >= 0.5:
+  print("Положительный комментарий.")
+else:
+  print("Отрицательный комментарий.")
