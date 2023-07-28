@@ -8,13 +8,13 @@ import tarfile
 import urllib.request
 
 # Загрузка данных
-url = "https://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz"
+# url = "https://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz"
 data_dir = "./aclImdb"
-if not os.path.exists(data_dir):
-    urllib.request.urlretrieve(url, "aclImdb_v1.tar.gz")
-    with tarfile.open("aclImdb_v1.tar.gz", "r:gz") as tar:
-        tar.extractall()
-    os.remove("aclImdb_v1.tar.gz")
+# if not os.path.exists(data_dir):
+#     urllib.request.urlretrieve(url, "aclImdb_v1.tar.gz")
+#     with tarfile.open("aclImdb_v1.tar.gz", "r:gz") as tar:
+#         tar.extractall()
+#     os.remove("aclImdb_v1.tar.gz")
 
 # Загрузка текстовых отзывов и их меток
 def load_data(subset):
@@ -46,34 +46,34 @@ train_data = pad_sequences(train_sequences, maxlen=max_sequence_length)
 test_data = pad_sequences(test_sequences, maxlen=max_sequence_length)
 
 # Создание и обучение модели RNN
-embedding_dim = 100
-model = tf.keras.models.Sequential([
-    tf.keras.layers.Embedding(max_words, embedding_dim, input_length=max_sequence_length),
-    tf.keras.layers.LSTM(128),
-    tf.keras.layers.Dense(1, activation='sigmoid')
-])
+# embedding_dim = 100
+# model = tf.keras.models.Sequential([
+#     tf.keras.layers.Embedding(max_words, embedding_dim, input_length=max_sequence_length),
+#     tf.keras.layers.LSTM(128),
+#     tf.keras.layers.Dense(1, activation='sigmoid')
+# ])
 
-model.compile(optimizer='adam',
-              loss='binary_crossentropy',
-              metrics=['accuracy'])
+# model.compile(optimizer='adam',
+#               loss='binary_crossentropy',
+#               metrics=['accuracy'])
 
-model.summary()
+# model.summary()
 
 # Обучение модели
-epochs = 5
-batch_size = 32
-model.fit(train_data, np.array(train_labels), epochs=epochs, batch_size=batch_size, validation_split=0.2)
+# epochs = 5
+# batch_size = 32
+# model.fit(train_data, np.array(train_labels), epochs=epochs, batch_size=batch_size, validation_split=0.2)
 
 # Сохранение модели на диск
-model.save("test_DS.h5")
+# model.save("test_DS.h5")
 
 # Загрузка модели с диска, если она уже обучена
 if os.path.exists("test_DS.h5"):
     model = tf.keras.models.load_model("test_DS.h5")
 
 # Оценка модели на тестовых данных
-loss, accuracy = model.evaluate(test_data, np.array(test_labels))
-print(f'Test accuracy: {accuracy}')
+# loss, accuracy = model.evaluate(test_data, np.array(test_labels))
+# print(f'Test accuracy: {accuracy}')
 
 # Ввод данных с клавиатуры для теста
 def get_user_input():
@@ -99,12 +99,12 @@ tokenizer = Tokenizer(num_words=max_words)
 tokenizer.fit_on_texts(train_texts)
 
 # Предложим пользователю ввести комментарий и получим его предсказание
-user_input = get_user_input()
+# user_input = get_user_input()
     
-user_data = preprocess_user_data(user_input, tokenizer, max_sequence_length)
-prediction = get_prediction(model, user_data)
+# user_data = preprocess_user_data(user_input, tokenizer, max_sequence_length)
+# prediction = get_prediction(model, user_data)
     
-if prediction >= 0.5:
-  print("Положительный комментарий.")
-else:
-  print("Отрицательный комментарий.")
+# if prediction >= 0.5:
+#   print("Положительный комментарий.")
+# else:
+#   print("Отрицательный комментарий.")
