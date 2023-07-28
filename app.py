@@ -63,4 +63,4 @@ def index():
     return render_template('index.html', messageScore=messageScore,messageSentiment = messageSentiment, comment = comment)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    pass
