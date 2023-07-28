@@ -1,5 +1,5 @@
 # Используем базовый образ Python
-FROM railwayapp/python:3
+FROM python:3
 
 # Устанавливаем рабочую директорию внутри контейнера
 WORKDIR /app
