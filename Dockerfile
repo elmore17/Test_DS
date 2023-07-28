@@ -20,7 +20,7 @@ COPY . /app/
 ENV FLASK_APP=app.py
 
 # Открываем порт, на котором будет работать приложение
-EXPOSE 3000
+EXPOSE 10000
 
 # Запускаем приложение при старте контейнера
-CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:3000"]
+CMD python3 ./app.py
